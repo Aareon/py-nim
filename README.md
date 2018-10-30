@@ -1,6 +1,9 @@
 # py-nim
 A Python implementation of the Nim programming language. Official Nim implementation: https://github.com/nim-lang/Nim
 
+## Requirements
+- Python 3.6+
+
 # License
 
 The compiler and the standard library are licensed under the MIT license, except for some modules which explicitly state otherwise. As a result you may use any compatible license (essentially any license) for your own programs developed with Nim. You are explicitly permitted to develop commercial applications using Nim.

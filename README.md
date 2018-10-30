@@ -7,4 +7,5 @@ The compiler and the standard library are licensed under the MIT license, except
 
 Please read the copying.txt file for more details.
 Original Nim-lang implementation copyright © 2006-2018 Andreas Rumpf, all rights reserved.
+
 **py-nim** implementation copyright © 2018 Aareon Sullivan, all rights reserved.

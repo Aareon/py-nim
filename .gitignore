@@ -1,0 +1,14 @@
+*.pyc
+*~
+.*.sw[op]
+*.egg-info
+.eggs
+.coverage
+venv
+.idea
+.tox
+.DS_Store
+pip-selfcheck.json
+pyvenv.cfg
+.vscode
+__pycache__/*

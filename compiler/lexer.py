@@ -1,20 +1,32 @@
 import string
 from enum import Enum
-from .nimlexbase import TBaseLexer
+from .lexbase import TBaseLexer
 
 # constants
-max_line_len = 80
-num_chars = list(
+MaxLineLength = 80
+numChars = list(
     [c for c in string.digits]
     + [c for c in string.ascii_uppercase]
     + [c for c in string.ascii_lowercase]
 )
-sym_chars = num_chars + [hex(h) for h in range(128, 256)]
-sym_start_chars = list(
+SymChars = numChars + [hex(h) for h in range(128, 256)]
+SymStartChars = list(
     [c for c in string.ascii_uppercase]
     + [c for c in string.ascii_lowercase]
     + [hex(h) for h in range(128, 256)]
 )
+literalishChars = [
+    "A", "B", "C", "D", "E", "F",
+    "a", "b", "c", "d", "e", "f",
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+    "X", "x",
+    "o", "O"
+    "c", "C",
+    "b", "B",
+    "_", ".", "'",
+    "d", "i", "u"
+]
+baseCodeChars = ["X", "x", "o", "b", "B", "c", "C"]
 
 TTokType = Enum("TTokType", [
     "tkInvalid", "tkEof",               # order is important here!
@@ -93,7 +105,7 @@ TokTypeToStr = [
 ]
 
 TNumericalBase = Enum("TNumericalBase", [
-    "base10", # base10 is the first element so that it is the correct default value
+    "base10",  # base10 is the first element so that it is the correct default value
     "base2", "base8", "base16"
 ])
 
@@ -101,19 +113,20 @@ CursorPosition = Enum("CursorPosition", [
     "None", "InToken", "BeforeToken", "AfterToken"
 ])
 
+
 class TToken:
-    def __init__(self):
-        self.tokType = None
-        self.indent = None
-        self.ident = None
-        self.iNumber = None
-        self.fNumber = None
-        self.base = None
-        self.strongSpaceA = None
-        self.strongSpaceB = None
-        self.literal = None
-        self.line = None
-        self.col = None
+    def __init__(self, **kwargs):
+        self.tokType = kwargs.get("tokType")
+        self.indent = kwargs.get("indent")
+        self.ident = kwargs.get("ident")
+        self.iNumber = kwargs.get("iNumber")
+        self.fNumber = kwargs.get("fNumber")
+        self.base = kwargs.get("base")
+        self.strongSpaceA = kwargs.get("strongSpaceA")
+        self.strongSpaceB = kwargs.get("strongSpaceB")
+        self.literal = kwargs.get("literal")
+        self.line = kwargs.get("line")
+        self.col = kwargs.get("col")
 
     def initToken(self):
         self.tokType = TTokType.tkInvalid
@@ -148,11 +161,14 @@ class TLexer(TBaseLexer):
         self.cache = None           # TODO : impl IdentCache
         self.config = None          # TODO : impl ConfigRef
 
-    def getLineInfo(self, tok:TToken):
-        # TODO : impl `msgs.newLineInfo`
-        # result = newLineInfo(self.fileIdx, tok.line, tok.col)
-        # return result
-        pass
+    def getLineInfo(self, tok: TToken = None):
+        if tok is not None:
+            # TODO : impl `msgs.newLineInfo`
+            # newLineInfo(self.fileIdx, tok.lineNumber, tok.col)
+            return None
+        else:
+            # newLineInfo(self.fileIdx, self.lineNumber, self.getColNumber(self.buf_pos))
+            return None
 
     def openLexer(self, fileIdx, inputstream, cache, config):
         self.openBaseLexer(inputstream)
@@ -162,7 +178,7 @@ class TLexer(TBaseLexer):
         self.lineNumber += inputstream.lineOffset
         self.cache = cache
         self.config = config
-    
+
     def closeLexer(self):
         if self.config is not None:
             self.config.linesCompiled += self.lineNumber
@@ -179,7 +195,112 @@ class TLexer(TBaseLexer):
             pass
 
     def lexMessage(self, msg, arg=""):
-        self.dispMessage(self.getLineInfo(), msg, arg)
+        return self.dispMessage(self.getLineInfo(), msg, arg)
 
-    
+    def lexMessageTok(self, msg, tok, arg=""):
+        info = None     # newLineInfo(self.fileIdx, tok.line, tok.col)
+        return self.dispMessage(info, msg, arg)
 
+    def lexMessagePos(self, msg, pos, arg=""):
+        # newLineInfo(self.fileIdx, self.lineNumber, pos - self.lineStart)
+        info = None
+        return self.dispMessage(info, msg, arg)
+
+    def matchTwoChars(self, first, second):
+        return (self.buf[self.buf_pos] == first) and (self.buf[self.buf_pos + 1] in second)
+
+    def eatChar(self, tok, replacementChar=None):
+        if replacementChar is not None:
+            tok.literal += replacementChar
+        else:
+            tok.literal += self.buf[self.buf_pos]
+        self.buf_pos += 1
+        return self
+
+    def matchUnderscoreChars(self, tok, chars):
+        result = 0
+        while True:
+            if self.buf[self.buf_pos] in chars:
+                tok.literal += self.buf[self.buf_pos]
+                self.buf_pos += 1
+                result += 1
+            else:
+                break
+
+            if self.buf[self.buf_pos] == "_":
+                if self.buf[self.buf_pos+1] not in chars:
+                    self.lexMessage(None,
+                                    "only single underscores may occur in a token and token may not "
+                                    + "end with an underscore: e.g. '1__1' and '1_' are invalid")
+                    break
+                tok.literal += "_"
+                self.buf_pos += 1
+        return result
+
+    def getNumber(self, result):
+        def matchChars(self, tok, chars):
+            while self.buf[self.buf_pos] in chars:
+                tok.literal += self.buf[self.buf_pos]
+                self.buf_pos += 1
+            return self
+
+        # msgKind=lineinfos.errGenerated
+        def lexMessageLitNum(self, msg, startpos, msgKind=None):
+            msgPos = self.buf_pos
+
+            t = TToken(literal="")
+            self.buf_pos = startpos
+
+            self.matchChars(t, literalishChars)
+
+            if self.buf[self.buf_pos] in ["+", "-"] and \
+                    self.buf[self.buf_pos - 1] in ["e", "E"]:
+                t.literal += self.buf[self.buf_pos]
+                self.buf_pos += 1
+                self.matchChars(t, literalishChars)
+
+            if self.buf[self.buf_pos] in ["'", "f", "F", "d", "D", "i", "I", "u", "U"]:
+                self.buf_pos += 1
+                t.literal += self.buf[self.buf_pos]
+                self.matchChars(t, [c for c in string.digits])
+
+            self.buf_pos = msgPos
+            self.lexMessage(msgKind, msg % t.literal)
+
+        isBase10 = True
+        numDigits = 0
+
+        # function consts
+        literalishChars = baseCodeChars + [
+            "A", "B", "C", "D", "E", "F",
+            "a", "b", "c", "d", "e", "f",
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+            "_", "'"
+        ]
+        floatTypes = [
+            TTokType.tkFloatLit, TTokType.tkFloat32Lit,
+            TTokType.tkFloat64Lit, TTokType.tkFloat128Lit
+        ]
+        result.tokType = TTokType.tkIntLit
+        result.literal = ""
+        result.base = TNumericalBase.base10
+        startpos = self.buf_pos
+        # TODO : `impl tokenBegin(result, startpos)`
+
+
+# TODO : impl `tokenBegin(tok, pos)` template
+#             `tokenEnd(tok, pos)` template
+#             `tokenEndIgnore(tok, pos)` template
+#             `tokenEndPrevious(tok, pos)` template
+
+
+def unsafeParseUInt(s, b, start=0):
+    i = start
+    if i < len(s) and s[i] in string.digits:
+        b = 0
+        while i < len(s) and s[i] in string.digits:
+            b *= 10 + (ord(s[i]) - ord("0"))
+            i += 1
+            while i < len(s) and s[i] == "_":
+                i += 1
+        return i - start

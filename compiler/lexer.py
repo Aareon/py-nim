@@ -664,7 +664,7 @@ class TLexer(TBaseLexer):
                     self.lexMessage(None, "\\n not allowed in character literal")
                 tok.literal += self.config.target.tnl
             else:
-                tok.literal += '\L'
+                tok.literal += r'\L'
         elif self.buf[self.bufpos] in ['p', 'P']:
             if tok.tokType == TTokType.tkCharLit:
                 # TODO : lexMessage(L, errGenerated, ...

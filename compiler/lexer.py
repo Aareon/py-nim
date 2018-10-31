@@ -175,6 +175,22 @@ class TToken:
         self.ident = None
 
 
+def unsafeParseUInt(s, b, start=0):
+    i = start
+    if i < len(s) and s[i] in {countup('0', '9')}:
+        b = 0
+        while i < len(s) and s[i] in {countup('0', '9')}:
+            b *= 10 + (ord(s[i]) - ord("0"))
+            i += 1
+            while i < len(s) and s[i] == "_":
+                i += 1
+        return i - start
+
+
+def ones(n):
+    return ((1 << n)-1)
+
+
 class TLexer(TBaseLexer):
     def __init__(self):
         self.fileIdx = None         # TODO : impl FileIndex
@@ -254,6 +270,9 @@ class TLexer(TBaseLexer):
             self.colA = 0
         if nimpretty is not None:
             tok.offsetB = self.offsetBase + pos
+
+    # TODO : impl `tokenEndIgnore(tok, pos)` template
+    #             `tokenEndPrevious(tok, pos)` template
 
     def eatChar(self, tok, replacementChar=None):
         if replacementChar is not None:
@@ -575,17 +594,84 @@ class TLexer(TBaseLexer):
                 lexMessageLitNum("number out of range: '$1'", startpos)
             self.tokenEnd(result, postPos-1)
             self.bufpos = postPos
+    
+    def handleHexChar(self, xi:int):
+        if self.buf[self.bufpos] in [countup('0', '9')]:
+            xi = (xi << 4) or (ord(self.buf[self.bufpos]) - ord('0'))
+            self.bufpos += 1
+        elif self.buf[self.bufpos] in [countup('a', 'f')]:
+            xi = (xi << 4) or (ord(self.buf[self.bufpos]) - ord('a') + 10)
+            self.bufpos += 1
+        elif self.buf[self.bufpos] in [countup('A', 'F')]:
+            xi = (xi << 4) or (ord(self.buf[self.bufpos]) - ord('A') + 10)
+            self.bufpos += 1
+        else:
+            # self.lexMessage(errGenerated, ...)
+            self.lexMessage(None, f"expected a hex digit, but found {self.buf[self.bufpos]}")
+        # Need to progress for `nim check`
+        self.bufpos += 1
 
-# TODO : impl `tokenEndIgnore(tok, pos)` template
-#             `tokenEndPrevious(tok, pos)` template
+    def handleDecChars(self, xi:int):
+        while self.buf[self.bufpos] in {countup('0', '9')}:
+            xi = (xi * 10) or (ord(self.buf[self.bufpos]) - ord('0'))
+            self.bufpos += 1
 
-def unsafeParseUInt(s, b, start=0):
-    i = start
-    if i < len(s) and s[i] in string.digits:
-        b = 0
-        while i < len(s) and s[i] in string.digits:
-            b *= 10 + (ord(s[i]) - ord("0"))
-            i += 1
-            while i < len(s) and s[i] == "_":
-                i += 1
-        return i - start
+    def addUnicodeCodePoint(s, i):
+        # inlined toUTF-8 to avoid unicode and strutils dependencies.
+        pos = s.len
+
+        if i <= 127:
+            s.setLen(pos+1)
+            s[pos+0] = chr(i)
+        elif i <= 0x07ff:
+            s.setLen(pos+2)
+            s[pos+0] = chr((i >> 6) or 0b110_00000)
+            s[pos+1] = chr((i and ones(6)) or 0b10_0000_00)
+        elif i <= 0xffff:
+            s.setLen(pos+3)
+            s[pos+0] = chr(i >> 12 or 0b1110_0000)
+            s[pos+1] = chr(i >> 6 and ones(6) or 0b10_0000_00)
+            s[pos+2] = chr(i >> ones(6) or 0b10_0000_00)
+        elif i <= 0x001fffff:
+            s.setLen(pos+4)
+            s[pos+0] = chr(i >> 18 or 0b1111_0000)
+            s[pos+1] = chr(i >> 12 and ones(6) or 0b10_0000_00)
+            s[pos+2] = chr(i >> 6 and ones(6) or 0b10_0000_00)
+            s[pos+3] = chr(i and ones(6) or 0b10_0000_00)
+        elif i <= 0x03ffffff:
+            s.setLen(pos+5)
+            s[pos+0] = chr(i >> 24 or 0b111110_00)
+            s[pos+1] = chr(i >> 18 and ones(6) or 0b10_0000_00)
+            s[pos+2] = chr(i >> 12 and ones(6) or 0b10_0000_00)
+            s[pos+3] = chr(i >> 6 and ones(6) or 0b10_0000_00)
+            s[pos+4] = chr(i and ones(6) or 0b10_0000_00)
+        elif i <= 0x7fffffff:
+            s.setLen(pos+6)
+            s[pos+0] = chr(i >> 30 or 0b1111110_0)
+            s[pos+1] = chr(i >> 24 and ones(6) or 0b10_0000_00)
+            s[pos+2] = chr(i >> 18 and ones(6) or 0b10_0000_00)
+            s[pos+3] = chr(i >> 12 and ones(6) or 0b10_0000_00)
+            s[pos+4] = chr(i >> 6 and ones(6) or 0b10_0000_00)
+            s[pos+5] = chr(i and ones(6) or 0b10_0000_00)
+    
+    def getEscapedChar(self, tok):
+        self.bufpos += 1
+
+        if self.buf[self.bufpos] in ['n', 'N']:
+            if self.config.oldNewLines:
+                if tok.tokType == TTokType.tkCharLit:
+                    # TODO : lexMessage(L, errGenerated, ...
+                    self.lexMessage(None, "\\n not allowed in character literal")
+                tok.literal += self.config.target.tnl
+            else:
+                tok.literal += '\L'
+        elif self.buf[self.bufpos] in ['p', 'P']:
+            if tok.tokType == TTokType.tkCharLit:
+                # TODO : lexMessage(L, errGenerated, ...
+                self.lexMessage(None, "\\p not allowed in character literal")
+            tok.literal += self.config.target.tnl
+            self.bufpos += 1
+        elif self.buf[self.bufpos] in ['r', 'R', 'c', 'C']:
+            # TODO : define CR
+            tok.literal += CR
+            self.bufpos += 1

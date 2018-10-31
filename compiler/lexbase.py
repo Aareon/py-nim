@@ -18,25 +18,25 @@ class TBaseLexer:
     def __init__(self):
         self.bufpos = None
         self.buf = None
-        self.buf_len = None
+        self.bufLen = None
         self.stream = None            # llstream object
         self.lineNumber = None
         self.sentinel = None
         self.lineStart = None
         self.offsetBase = None
 
-    def openBaseLexer(self, inputstream, buf_len:int=8192):
-        assert buf_len > 0
+    def openBaseLexer(self, inputstream, bufLen:int=8192):
+        assert bufLen > 0
 
         self.bufpos = 0
-        self.offset_base = 0
-        self.buf_len = buf_len
+        self.offsetBase = 0
+        self.bufLen = bufLen
         # L.buf = cast[cstring](alloc(bufLen * chrSize))
         # This would normally store a new `cstring` in `L.buf` w/ a given size,
         # but 1. we don't need to allocate memory on the heap, and 2. we haven't
         # started messing with `cstring`s yet. For now we make `self.buf = None`
         self.buf = None
-        self.sentinel = buf_len - 1
+        self.sentinel = bufLen - 1
         self.lineStart = 0
         self.lineNumber = 1
         self.stream = inputstream
@@ -49,7 +49,7 @@ class TBaseLexer:
 
     def getCurrentLine(self, marker:bool=True):
         result = ""
-        i = self.line_start
+        i = self.lineStart
         while self.buf[i] not in [CR, LF, EndOfFile]:
             result += self.buf[i]
             i += 1
@@ -61,7 +61,7 @@ class TBaseLexer:
         return result
 
     def getColNumber(self, pos:int):
-        return abs(pos - self.line_start)
+        return abs(pos - self.lineStart)
 
     def handleCR(self, pos:int):
         assert self.buf[pos] == CR
@@ -81,25 +81,25 @@ class TBaseLexer:
     def skipUTF8_BOM(self):
         if self.buf[0] == '\xEF' and self.buf[1] == '\xBB' and self.buf[2] == '\xBF':
             self.bufpos += 3
-            self.line_start += 3
+            self.lineStart += 3
         return self
 
     def fillBaseLexer(self, pos:int):
         assert pos <= self.sentinel
 
         if pos < self.sentinel:
-            self.line_start = pos + 1   # nothing to do
+            self.lineStart = pos + 1   # nothing to do
         else:
             self.fillBuffer()
-            self.offset_base += pos + 1
+            self.offsetBase += pos + 1
             self.bufpos = 0
-            self.line_start = 0
+            self.lineStart = 0
         return self
 
     def fillBuffer(self):
-        assert self.sentinel < self.buf_len
+        assert self.sentinel < self.bufLen
 
-        to_copy = self.buf_len - self.sentinel - 1
+        to_copy = self.bufLen - self.sentinel - 1
         assert to_copy >= 0
 
         if to_copy > 0:
@@ -114,7 +114,7 @@ class TBaseLexer:
         else:
             s -= 1
             while True:
-                assert s < self.buf_len
+                assert s < self.bufLen
 
                 while (s >= 0) and not (self.buf[s] in NewLines):
                     s -= 1
@@ -123,13 +123,13 @@ class TBaseLexer:
                     self.sentinel = s
                     break
                 else:
-                    old_buf_len = self.buf_len
-                    self.buf_len *= 2
+                    old_buf_len = self.bufLen
+                    self.bufLen *= 2
 
                     # TODO : L.buf = cast[cstring](realloc(L.buf, L.bufLen * chrSize))
                     # unlike the work-around for `alloc` in `openBaseLexer`, this
                     # portion might require some thought...
-                    assert self.buf_len - old_buf_len == old_buf_len
+                    assert self.bufLen - old_buf_len == old_buf_len
 
                     chars_read /= self.stream.read(self.buf[old_buf_len])
                     if chars_read < old_buf_len:
@@ -137,5 +137,5 @@ class TBaseLexer:
                         self.sentinel = old_buf_len + chars_read
                         break
                     
-                    s = self.buf_len + 1
+                    s = self.bufLen + 1
         return self

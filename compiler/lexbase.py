@@ -15,20 +15,20 @@ NewLines = [CR, LF]
 
 
 class TBaseLexer:
-    def __init__(self, buf_pos, buf, buf_len, stream, line_number, sentinel, line_start, offset_base):
-        self.buf_pos = buf_pos
-        self.buf = buf
-        self.buf_len = buf_len
-        self.stream = stream            # llstream object
-        self.line_number = line_number
-        self.sentinel = sentinel
-        self.line_start = line_start
-        self.offset_base = offset_base
+    def __init__(self):
+        self.bufpos = None
+        self.buf = None
+        self.buf_len = None
+        self.stream = None            # llstream object
+        self.lineNumber = None
+        self.sentinel = None
+        self.lineStart = None
+        self.offsetBase = None
 
-    def openBaseLexer(self, input_stream, buf_len:int=8192):
+    def openBaseLexer(self, inputstream, buf_len:int=8192):
         assert buf_len > 0
 
-        self.buf_pos = 0
+        self.bufpos = 0
         self.offset_base = 0
         self.buf_len = buf_len
         # L.buf = cast[cstring](alloc(bufLen * chrSize))
@@ -37,9 +37,9 @@ class TBaseLexer:
         # started messing with `cstring`s yet. For now we make `self.buf = None`
         self.buf = None
         self.sentinel = buf_len - 1
-        self.line_start = 0
-        self.line_number = 1
-        self.stream = input_stream
+        self.lineStart = 0
+        self.lineNumber = 1
+        self.stream = inputstream
         self.fillBuffer()
         self.skipUTF8_BOM()
 
@@ -57,7 +57,7 @@ class TBaseLexer:
         result += "\n"
 
         if marker:
-            result += (" " * self.getColNumber(self.buf_pos)) + "^\n"
+            result += (" " * self.getColNumber(self.bufpos)) + "^\n"
         return result
 
     def getColNumber(self, pos:int):
@@ -66,7 +66,7 @@ class TBaseLexer:
     def handleCR(self, pos:int):
         assert self.buf[pos] == CR
 
-        self.line_number += 1
+        self.lineNumber += 1
         result = self.fillBaseLexer(pos)
         if self.buf[result] == LF:
             result = self.fillBaseLexer(result)
@@ -75,12 +75,12 @@ class TBaseLexer:
     def handleLF(self, pos:int):
         assert self.buf[pos] == LF
 
-        self.line_number += 1
+        self.lineNumber += 1
         return self.fillBaseLexer(pos)
 
     def skipUTF8_BOM(self):
         if self.buf[0] == '\xEF' and self.buf[1] == '\xBB' and self.buf[2] == '\xBF':
-            self.buf_pos += 3
+            self.bufpos += 3
             self.line_start += 3
         return self
 
@@ -92,7 +92,7 @@ class TBaseLexer:
         else:
             self.fillBuffer()
             self.offset_base += pos + 1
-            self.buf_pos = 0
+            self.bufpos = 0
             self.line_start = 0
         return self
 

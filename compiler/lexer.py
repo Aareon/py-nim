@@ -1,6 +1,8 @@
 import string
 from enum import Enum
 
+from lib.strutils import parseFloat
+
 from . import *
 from .lexbase import TBaseLexer
 
@@ -440,6 +442,66 @@ class TLexer(TBaseLexer):
                     else:
                         raise Exception(self.config, self.getLineInfo(), 'getNumber')
             
+                    if result.tokType in [TTokType.tkIntLit, TTokType.tkInt64Lit]:
+                        result.iNumber = xi
+                    elif result.tokType == TTokType.tkInt8Lit:
+                        result.iNumber = BiggestInt(int8(toU8(int64(xi))))
+                    elif result.tokType == TTokType.tkInt16Lit:
+                        result.iNumber = BiggestInt(int16(toU16(int64(xi))))
+                    elif result.tokType == TTokType.tkInt32Lit:
+                        result.iNumber = BiggestInt(int32(toU32(int64(xi))))
+                    elif result.tokType in {TTokType.tkUIntLit, TTokType.tkUInt64Lit}:
+                        result.iNumber = xi
+                    elif result.tokType == TTokType.tkUInt8Lit:
+                        result.iNumber = BiggestInt(uint8(toU8(int64(xi))))
+                    elif result.tokType == TTokType.tkUInt16Lit:
+                        result.iNumber = BiggestInt(uint16(toU16(int64(xi))))
+                    elif result.tokType == TTokType.tkUInt32Lit:
+                        result.iNumber = BiggestInt(uint32(toU32(int64(xi))))
+                    elif result.tokType == TTokType.tkFloat32Lit:
+                        # TODO : result.fNumber = (cast[PFloat32](addr(xi)))[]
+                        # note: this code is endian neutral!
+                        # XXX: Test this on big endian machine!
+                        pass
+                    elif result.tokType in {TTokType.tkFloat64Lit, TTokType.tkFloatLit}:
+                        # TODO : result.fNumber = (cast[PFloat64](addr(xi)))[]
+                        pass
+                    else:
+                        Exception(self.config, self.getLineInfo(), 'getNumber')
+
+                    # Bounds checks. Non decimal literals are allowed to overflow the range of
+                    # the datatype as long as their pattern don't overflow _bitwise_, hence
+                    # below checks of signed sizes against uint*.high is deliberate:
+                    # (0x80'u8 = 128, 0x80'i8 = -128, etc == OK)
+                    if result.tokType not in floatTypes:
+                        if result.tokType in {TTokType.tkUInt8Lit, TTokType.tkUInt16Lit, TTokType.tkUInt32Lit}:
+                            outOfRange = result.iNumber != xi
+                        elif result.tokType == TTokType.tkInt8Lit:
+                            outOfRange = (xi > BiggestInt(uint8.high))
+                        elif result.tokType == TTokType.tkInt16Lit:
+                            outOfRange = (xi > BiggestInt(uint16.high))
+                        elif result.tokType == TTokType.tkInt32Lit:
+                            outOfRange = (xi > BiggestInt(uint32.high))
+                        else:
+                            outOfRange = False
+
+                        if outOfRange:
+                            lexMessageLitNum("number out of range: '$1'", startpos)
+                
+                else:
+                    if result.tokType == floatTypes:
+                        result.fNumber = parseFloat(result.literal)
+                    elif result.tokType == TTokType.tkUInt64Lit:
+                        xi = 0
+                        length = unsafeParseUInt(result.literal, xi)
+                        if length != len(result.literal) or length == 0:
+                            raise ValueError(f"invalid integer: {xi}")
+                        result.iNumber = xi
+                    else:
+                        # TODO : impl strutils.parseBiggestInt(s, start=0)
+                        pass
+                        
+
             # TODO : type conversions
             # need to implement the following;
             # BiggestInt,

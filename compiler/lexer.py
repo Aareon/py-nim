@@ -341,13 +341,33 @@ class TLexer(TBaseLexer):
             endpos = self.bufpos
 
             # Second stage, find out if there's a datatype suffix and handle it
+            postPos = endpos
+            if self.buf[postPos] in {'\'', 'f', 'F', 'd', 'D', 'i', 'I', 'u', 'U'}:
+                if self.buf[postPos] == '\'':
+                    postPos += 1
+
+                if self.buf[postPos] in {'f', 'F'}:
+                    if (self.buf[postPos] == '3') and (self.buf[postPos + 1] == '2'):
+                        result.tokType = TTokType.tkFloat32Lit
+                        postPos += 2
+                    elif (self.buf[postPos] == '6') and (self.buf[postPos + 1] == '4'):
+                        result.tokType = TTokType.tkFloat64Lit
+                    elif (self.buf[postPos] == '1') and \
+                        (self.buf[postPos + 1] == '2') and \
+                        (self.buf[postPos] + 2 == '8'):
+                        result.tokType = TTokType.tkFloat128Lit
+                        postPos += 3
+                    else:
+                        result.tokType = TTokType.tkFloatLit
+                elif self.buf[postPos] in {'d', 'D'}:
+                    postPos += 1
+                    result.tokType = TTokType.tkFloat64Lit      
 
 
 # TODO : impl `tokenBegin(tok, pos)` template
 #             `tokenEnd(tok, pos)` template
 #             `tokenEndIgnore(tok, pos)` template
 #             `tokenEndPrevious(tok, pos)` template
-
 
 def unsafeParseUInt(s, b, start=0):
     i = start

@@ -171,7 +171,7 @@ class TLexer(TBaseLexer):
             # newLineInfo(self.fileIdx, tok.lineNumber, tok.col)
             return None
         else:
-            # newLineInfo(self.fileIdx, self.lineNumber, self.getColNumber(self.buf_pos))
+            # newLineInfo(self.fileIdx, self.lineNumber, self.getColNumber(self.bufpos))
             return None
 
     def openLexer(self, fileIdx, inputstream, cache, config):
@@ -211,78 +211,78 @@ class TLexer(TBaseLexer):
         return self.dispMessage(info, msg, arg)
 
     def matchTwoChars(self, first, second):
-        return (self.buf[self.buf_pos] == first) and (self.buf[self.buf_pos + 1] in second)
+        return (self.buf[self.bufpos] == first) and (self.buf[self.bufpos + 1] in second)
 
     def eatChar(self, tok, replacementChar=None):
         if replacementChar is not None:
             tok.literal += replacementChar
         else:
-            tok.literal += self.buf[self.buf_pos]
-        self.buf_pos += 1
+            tok.literal += self.buf[self.bufpos]
+        self.bufpos += 1
         return self
 
     def matchUnderscoreChars(self, tok, chars):
         result = 0
         while True:
-            if self.buf[self.buf_pos] in chars:
-                tok.literal += self.buf[self.buf_pos]
-                self.buf_pos += 1
+            if self.buf[self.bufpos] in chars:
+                tok.literal += self.buf[self.bufpos]
+                self.bufpos += 1
                 result += 1
             else:
                 break
 
-            if self.buf[self.buf_pos] == "_":
-                if self.buf[self.buf_pos+1] not in chars:
+            if self.buf[self.bufpos] == "_":
+                if self.buf[self.bufpos+1] not in chars:
                     self.lexMessage(None,
                                     "only single underscores may occur in a token and token may not "
                                     + "end with an underscore: e.g. '1__1' and '1_' are invalid")
                     break
                 tok.literal += "_"
-                self.buf_pos += 1
+                self.bufpos += 1
         return result
 
     def getNumber(self, result):
-        def matchChars(self, tok, chars):
-            while self.buf[self.buf_pos] in chars:
-                tok.literal += self.buf[self.buf_pos]
-                self.buf_pos += 1
+        def matchChars(cls, tok, chars):
+            while self.buf[self.bufpos] in chars:
+                tok.literal += self.buf[self.bufpos]
+                self.bufpos += 1
             return self
 
         # msgKind=lineinfos.errGenerated
-        def lexMessageLitNum(self, msg, startpos, msgKind=None):
+        def lexMessageLitNum(cls, msg, startpos, msgKind=None):
             literalishChars = {
                 countup('A', 'F'), countup('a', 'f'),
                 countup('0', '9'), "X", "x", "o", "O",
                 "c", "C", "b", "B", "_", ".", "'", "d",
                 "i", "u"
             }
-            msgPos = self.buf_pos
+            msgPos = self.bufpos
 
             t = TToken(literal="")
-            self.buf_pos = startpos
+            self.bufpos = startpos
 
-            self.matchChars(t, literalishChars)
+            matchChars(self, t, literalishChars)
 
-            if self.buf[self.buf_pos] in ["+", "-"] and \
-                    self.buf[self.buf_pos - 1] in ["e", "E"]:
-                t.literal += self.buf[self.buf_pos]
-                self.buf_pos += 1
-                self.matchChars(t, literalishChars)
+            if self.buf[self.bufpos] in ["+", "-"] and \
+                    self.buf[self.bufpos - 1] in ["e", "E"]:
+                t.literal += self.buf[self.bufpos]
+                self.bufpos += 1
+                matchChars(self, t, literalishChars)
 
-            if self.buf[self.buf_pos] in ["'", "f", "F", "d", "D", "i", "I", "u", "U"]:
-                self.buf_pos += 1
-                t.literal += self.buf[self.buf_pos]
-                self.matchChars(t, [c for c in string.digits])
+            if self.buf[self.bufpos] in ["'", "f", "F", "d", "D", "i", "I", "u", "U"]:
+                self.bufpos += 1
+                t.literal += self.buf[self.bufpos]
+                matchChars(self, t, {countup('0', '9')})
 
-            self.buf_pos = msgPos
+            self.bufpos = msgPos
             self.lexMessage(msgKind, msg % t.literal)
 
         isBase10 = True
         numDigits = 0
 
         # function consts
-        baseCodeChars = {"X", "x", "o", "b", "B", "c", "C"}
-        literalishChars = set(list(baseCodeChars) + [
+        baseCodeChars = ["X", "x", "o", "b", "B", "c", "C"]
+        literalishChars = set(baseCodeChars + [
             countup('A', 'F'),
             countup('a', 'f'),
             countup('0', '9'),
@@ -295,8 +295,37 @@ class TLexer(TBaseLexer):
         result.tokType = TTokType.tkIntLit
         result.literal = ""
         result.base = TNumericalBase.base10
-        startpos = self.buf_pos
+        startpos = self.bufpos
         # TODO : `impl tokenBegin(result, startpos)`
+
+        if self.buf[self.bufpos] == '0' and self.buf[self.bufpos] in set(baseCodeChars + ['c', 'C', 'O']):
+            isBase10 = False
+            self.eatChar(result, 0)
+            if self.buf[self.bufpos] in ['c', 'C']:
+                lexMessageLitNum(self,
+                    "$1 will soon be invalid for oct literals; Use '0o' "
+                    + "for octals. 'c', 'C' prefix",
+                    startpos,
+                    None) # TODO: impl lineinfos
+            elif self.buf[self.bufpos] == 'O':
+                lexMessageLitNum(self,
+                    "$1 is an invalid int literal; For octal literals "
+                    + "use the '0o' prefix.", startpos)
+            elif self.buf[self.bufpos] in ['x', 'X']:
+                self.eatChar(result, 'x')
+                numDigits = self.matchUnderscoreChars(result, {countup('0', '9'), countup('a', 'f'), countup('A', 'F')})
+            elif self.buf[self.bufpos] == 'o':
+                self.eatChar(result, 'b')
+                numDigits = self.matchUnderscoreChars(result, {countup('0', '1')})
+            else:
+                # TODO : impl msgs
+                # lexMessageLitNum(L, "invalid number: '$1'", startpos)
+                raise Exception('InternalError')
+            
+            if numDigits == 0:
+                lexMessageLitNum(self, "invalid number: '$1'", startpos)
+            else:
+                self.matchUnderscoreChars(result, {countup('0', '9')})
 
 
 # TODO : impl `tokenBegin(tok, pos)` template

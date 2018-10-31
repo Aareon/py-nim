@@ -1,10 +1,29 @@
+import os
 import string
+import sys
 from enum import Enum
 
-from lib.strutils import parseFloat
-
-from . import *
 from .lexbase import TBaseLexer
+
+try:
+    from nimsuggest import nimsuggest
+except ImportError:
+    nimsuggest = None
+
+try:
+    from nimpretty import nimpretty
+except ImportError:
+    nimpretty = None
+
+
+sys.path.append(
+    os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    + "/lib"
+)
+
+from lib import strutils
+from lib.system import *
+
 
 # constants
 MaxLineLength = 80
@@ -216,6 +235,26 @@ class TLexer(TBaseLexer):
     def matchTwoChars(self, first, second):
         return (self.buf[self.bufpos] == first) and (self.buf[self.bufpos + 1] in second)
 
+    def tokenBegin(self, tok, pos):
+        if nimpretty is not None:
+            # TODO : make sure this is what we want to do
+            self.colA = self.getColNumber(pos)
+        if nimpretty is not None:
+            tok.offsetA = self.offsetBase + pos
+
+    def tokenEnd(self, tok, pos):
+        if nimsuggest is not None:
+            self.colB = self.getColNumber(pos)+1
+            if (self.fileIdx == self.config.m.trackPos.FileIndex) and \
+               (self.config.m.trackPos.col in countup(self.colA, self.colB)) and \
+               (self.lineNumber == self.config.m.trackPos.line.int) and \
+               (self.config.ideCmd in {'ideSug', 'ideCon'}): # TODO : impl config IDE command Enum
+                self.cursor = CursorPosition.InToken
+                self.config.m.trackPos.col = self.colA.int16
+            self.colA = 0
+        if nimpretty is not None:
+            tok.offsetB = self.offsetBase + pos
+
     def eatChar(self, tok, replacementChar=None):
         if replacementChar is not None:
             tok.literal += replacementChar
@@ -250,6 +289,7 @@ class TLexer(TBaseLexer):
                 tok.literal += self.buf[self.bufpos]
                 self.bufpos += 1
 
+        # TODO : impl `lineinfos.errGenerated`
         # msgKind=lineinfos.errGenerated
         def lexMessageLitNum(msg, startpos, msgKind=None):
             literalishChars = {
@@ -298,7 +338,7 @@ class TLexer(TBaseLexer):
         result.literal = ""
         result.base = TNumericalBase.base10
         startpos = self.bufpos
-        # TODO : `impl tokenBegin(result, startpos)`
+        self.tokenBegin(result, startpos)
 
         # First stage: find out base, make verifications, build token literal string
         # {'c', 'C'} is added for deprecation reasons to provide a clear error message
@@ -323,7 +363,7 @@ class TLexer(TBaseLexer):
                 numDigits = self.matchUnderscoreChars(result, {countup('0', '1')})
             else:
                 # TODO : impl msgs
-                # lexMessageLitNum(L, "invalid number: '$1'", startpos)
+                lexMessageLitNum("invalid number: '$1'", startpos)
                 raise Exception('InternalError')
             
             if numDigits == 0:
@@ -474,6 +514,7 @@ class TLexer(TBaseLexer):
                     # below checks of signed sizes against uint*.high is deliberate:
                     # (0x80'u8 = 128, 0x80'i8 = -128, etc == OK)
                     if result.tokType not in floatTypes:
+                        outOfRange = None
                         if result.tokType in {TTokType.tkUInt8Lit, TTokType.tkUInt16Lit, TTokType.tkUInt32Lit}:
                             outOfRange = result.iNumber != xi
                         elif result.tokType == TTokType.tkInt8Lit:
@@ -489,7 +530,7 @@ class TLexer(TBaseLexer):
                             lexMessageLitNum("number out of range: '$1'", startpos)
                 
                 else:
-                    if result.tokType == floatTypes:
+                    if result.tokType in floatTypes:
                         result.fNumber = parseFloat(result.literal)
                     elif result.tokType == TTokType.tkUInt64Lit:
                         xi = 0
@@ -498,27 +539,44 @@ class TLexer(TBaseLexer):
                             raise ValueError(f"invalid integer: {xi}")
                         result.iNumber = xi
                     else:
-                        # TODO : impl strutils.parseBiggestInt(s, start=0)
-                        pass
-                        
+                        result.iNumber = strutils.parseBiggestInt(result.literal)
 
-            # TODO : type conversions
-            # need to implement the following;
-            # BiggestInt,
-            # int8, toU8, int
-            # int16, toU16
-            # int32, toU32, int64
-            # uint8, uint16, uint32
+                    # Explicit bounds checks
+                    outOfRange = None
+                    if result.tokType == TTokType.tkInt8Lit:
+                        outOfRange = (result.iNumber < int8.low or result.iNumber > int8.high)
+                    elif result.tokType == TTokType.tkUInt8Lit:
+                        outOfRange = (result.iNumber < BiggestInt(uint8.low) or
+                                      result.iNumber > BiggestInt(uint8.high))
+                    elif result.tokType == TTokType.tkInt16Lit:
+                        outOfRange = (result.iNumber < int16.low or result.iNumber > int16.high)
+                    elif result.tokType == TTokType.tkUInt16Lit:
+                        outOfRange = (result.iNumber < BiggestInt(uint16.low) or
+                                      result.iNumber > BiggestInt(uint16.high))
+                    elif result.tokType == TTokType.tkInt32Lit:
+                        outOfRange = (result.iNumber < int32.low or result.iNumber > int32.high)
+                    elif result.tokType == TTokType.tkUInt32Lit:
+                        outOfRange = (result.iNumber < BiggestInt(uint32.low) or
+                                      result.iNumber > BiggestInt(uint32.high))
+                    else:
+                        outOfRange = False
+                    
+                    if outOfRange:
+                        lexMessageLitNum("number out of range: '$1'", startpos)
+                    
+                    # Promote int literal to int64? Not always necessary, but more consistent
+                    if result.tokType == TTokType.tkIntLit:
+                        if (result.iNumber < low(int32)) or (result.iNumber > high(int32)):
+                            result.tokType = TTokType.tkInt64Lit
 
             except ValueError:
                 lexMessageLitNum("invalid number: '$1'", startpos)
             except:
                 lexMessageLitNum("number out of range: '$1'", startpos)
-            
+            self.tokenEnd(result, postPos-1)
+            self.bufpos = postPos
 
-# TODO : impl `tokenBegin(tok, pos)` template
-#             `tokenEnd(tok, pos)` template
-#             `tokenEndIgnore(tok, pos)` template
+# TODO : impl `tokenEndIgnore(tok, pos)` template
 #             `tokenEndPrevious(tok, pos)` template
 
 def unsafeParseUInt(s, b, start=0):

@@ -361,7 +361,22 @@ class TLexer(TBaseLexer):
                         result.tokType = TTokType.tkFloatLit
                 elif self.buf[postPos] in {'d', 'D'}:
                     postPos += 1
-                    result.tokType = TTokType.tkFloat64Lit      
+                    result.tokType = TTokType.tkFloat64Lit
+                elif self.buf[postPos] in {'i', 'I'}:
+                    postPos += 1
+                    if (self.buf[postPos] == '6') and (self.buf[postPos + 1] == '4'):
+                        result.tokType = TTokType.tkInt64Lit
+                        postPos += 2
+                    elif (self.buf[postPos] == '3') and (self.buf[postPos + 1] == '2'):
+                        result.tokType = TTokType.tkInt32Lit
+                    elif (self.buf[postPos] == '1') and (self.buf[postPos + 1] == '6'):
+                        result.tokType = TTokType.tkInt16Lit
+                        postPos += 2
+                    elif self.buf[postPos] == '8':
+                        result.tokType = TTokType.tkInt8Lit
+                        postPos += 1
+                    else:
+                        lexMessageLitNum("invalid number: '$1'", startpos)
 
 
 # TODO : impl `tokenBegin(tok, pos)` template

@@ -1,7 +1,8 @@
 import string
 from enum import Enum
-from .lexbase import TBaseLexer
+
 from . import *
+from .lexbase import TBaseLexer
 
 # constants
 MaxLineLength = 80
@@ -377,6 +378,29 @@ class TLexer(TBaseLexer):
                         postPos += 1
                     else:
                         lexMessageLitNum("invalid number: '$1'", startpos)
+                elif self.buf[postPos] in {'u', 'U'}:
+                    postPos += 1
+                    if (self.buf[postPos] == '6') and (self.buf[postPos + 1] == '4'):
+                        result.tokType = TTokType.tkUInt64Lit
+                        postPos += 2
+                    elif (self.buf[postPos] == '3') and (self.buf[postPos + 1] == '2'):
+                        result.tokType = TTokType.tkUInt32Lit
+                        postPos += 2
+                    elif (self.buf[postPos] == '1') and (self.buf[postPos + 1] == '6'):
+                        result.tokType = TTokType.tkUInt16Lit
+                        postPos += 2
+                    elif (self.buf[postPos] == '8'):
+                        result.tokType = TTokType.tkUInt8Lit
+                        postPos += 1
+                    else:
+                        result.tokType = TTokType.tkUIntLit
+                else:
+                    lexMessageLitNum("invalid number: '$1'", startpos)
+            
+            # Is there still a literalish char awaiting? Then it's an error!
+            if self.buf[postPos] in literalishChars or \
+                 (self.buf[postPos] == '.' and self.buf[postPos + 1] in {countup('0', '9')}):
+                lexMessageLitNum("invalid number: '$1'", startpos)
 
 
 # TODO : impl `tokenBegin(tok, pos)` template

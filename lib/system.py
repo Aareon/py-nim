@@ -16,6 +16,14 @@ float128 = type('float128', (float,), {'high': 'inf'})
 
 BiggestFloat = float64
 
+string = type('string', (str,), {
+    '_len': None,
+    'len': property(lambda self: self._len if self._len is not None else len(self)),
+    'setLen': lambda self, n: setLen(self, n),
+    '__str__': lambda self: self[0:self.len],
+    '__repr__': lambda self: f"'{self.__str__()}'"
+})
+
 def high(x):
     if hasattr(x, 'high'):
         return x.high
@@ -75,3 +83,11 @@ def countup(start, stop, step=1):
 
 FileMode = Enum("FileMode", ["fmRead", "fmWrite",
                              "fmReadWrite", "fmReadWriteExisting", "fmAppend"])
+
+def setLen(x, n):
+    if not isinstance(n, int):
+        raise ValueError(f"expected 'int', got 'type({n})'")
+    if n < 0:
+        raise ValueError(f"value {n} is not a natural number")
+    if hasattr(x, '_len') and hasattr(x, 'len'):
+            x._len = n

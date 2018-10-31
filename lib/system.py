@@ -1,11 +1,11 @@
 from enum import Enum
 
-
+int8 = type('int8', (int,), {'high': 0x7f, 'low': -0x80})
 int16 = type('int16', (int,), {'high': 0x7fff, 'low': -0x8000})
 int32 = type('int32', (int,), {'high': 0x7fffffff, 'low': -0x80000000})
 int64 = type('int64', (int,), {'high': 0x7fffffffffffffff, 'low': -0x8000000000000000})
-uint8 = type('uint32', (int,), {'high': 0xff, 'low': 0x0})
-uint16 = type('uint32', (int,), {'high': 0xffff, 'low': 0x0})
+uint8 = type('uint8', (int,), {'high': 0xff, 'low': 0x0})
+uint16 = type('uint16', (int,), {'high': 0xffff, 'low': 0x0})
 uint32 = type('uint32', (int,), {'high': 0xffffffff, 'low': 0x0})
 
 BiggestInt = int64
@@ -21,7 +21,7 @@ string = type('string', (str,), {
     'len': property(lambda self: self._len if self._len is not None else len(self)),
     'setLen': lambda self, n: setLen(self, n),
     '__str__': lambda self: self[0:self.len],
-    '__repr__': lambda self: f"'{self.__str__()}'"
+    '__repr__': lambda self: f"'{self.__str__()}'" # used for debugging
 })
 
 def high(x):

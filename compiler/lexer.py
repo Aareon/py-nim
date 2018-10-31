@@ -1,36 +1,30 @@
 import string
 from enum import Enum
 from .lexbase import TBaseLexer
+from . import *
 
 # constants
 MaxLineLength = 80
-numChars = list(
-    [c for c in string.digits]
-    + [c for c in string.ascii_uppercase]
-    + [c for c in string.ascii_lowercase]
-)
-SymChars = numChars + [hex(h) for h in range(128, 256)]
-SymStartChars = list(
-    [c for c in string.ascii_uppercase]
-    + [c for c in string.ascii_lowercase]
-    + [hex(h) for h in range(128, 256)]
-)
-literalishChars = [
-    "A", "B", "C", "D", "E", "F",
-    "a", "b", "c", "d", "e", "f",
-    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-    "X", "x",
-    "o", "O"
-    "c", "C",
-    "b", "B",
-    "_", ".", "'",
-    "d", "i", "u"
-]
-baseCodeChars = ["X", "x", "o", "b", "B", "c", "C"]
+numChars = {
+    countup('0', '9'), countup('a', 'z'), countup('A', 'Z')
+}
+SymChars = {
+    countup('a', 'z'), countup('A', 'Z'),
+    countup('0', '9'), countup('\x80', '\xFF')
+}
+SymStartChars = {
+    countup('a', 'z'), countup('A', 'Z'), countup('\x80', '\xFF')
+}
+OpChars = {
+    '+', '-', '*', '/', '\\', '<', '>', '!', '?',
+    '^', '.', '|', '=', '%', '&', '$', '@', '~', ':'
+}
+
 
 TTokType = Enum("TTokType", [
     "tkInvalid", "tkEof",               # order is important here!
-    "tkSymbol",  # keywords:
+    "tkSymbol", 
+    # keywords:
     "tkAddr", "tkAnd", "tkAs", "tkAsm",
     "tkBind", "tkBlock", "tkBreak", "tkCase", "tkCast",
     "tkConcept", "tkConst", "tkContinue", "tkConverter",
@@ -47,20 +41,30 @@ TTokType = Enum("TTokType", [
     "tkTemplate",
     "tkTry", "tkTuple", "tkType", "tkUsing",
     "tkVar", "tkWhen", "tkWhile", "tkXor",
-    "tkYield",  # end of keywords
+    "tkYield",
+
+    # types
     "tkIntLit", "tkInt8Lit", "tkInt16Lit", "tkInt32Lit", "tkInt64Lit",
     "tkUIntLit", "tkUInt8Lit", "tkUInt16Lit", "tkUInt32Lit", "tkUInt64Lit",
     "tkFloatLit", "tkFloat32Lit", "tkFloat64Lit", "tkFloat128Lit",
     "tkStrLit", "tkRStrLit", "tkTripleStrLit",
-    "tkGStrLit", "tkGTripleStrLit", "tkCharLit", "tkParLe", "tkParRi", "tkBracketLe",
+    "tkGStrLit", "tkGTripleStrLit", "tkCharLit",
+
+    # punctuation
+    "tkParLe", "tkParRi", "tkBracketLe",
     "tkBracketRi", "tkCurlyLe", "tkCurlyRi",
     "tkBracketDotLe", "tkBracketDotRi",  # [. and .]
     "tkCurlyDotLe", "tkCurlyDotRi",  # {. and .}
     "tkParDotLe", "tkParDotRi",  # (. and .)
     "tkComma", "tkSemiColon",
-    "tkColon", "tkColonColon", "tkEquals", "tkDot", "tkDotDot", "tkBracketLeColon",
-    "tkOpr", "tkComment", "tkAccent",
-    "tkSpaces", "tkInfixOpr", "tkPrefixOpr", "tkPostfixOpr"
+    "tkColon", "tkColonColon",
+    
+    # operators
+    "tkEquals", "tkDot", "tkDotDot", "tkBracketLeColon",
+    "tkOpr",
+
+    "tkComment", # ordinary comment
+    "tkAccent", "tkSpaces", "tkInfixOpr", "tkPrefixOpr", "tkPostfixOpr"
 ])
 
 TTokTypes = set(TTokType)
@@ -246,6 +250,12 @@ class TLexer(TBaseLexer):
 
         # msgKind=lineinfos.errGenerated
         def lexMessageLitNum(self, msg, startpos, msgKind=None):
+            literalishChars = {
+                countup('A', 'F'), countup('a', 'f'),
+                countup('0', '9'), "X", "x", "o", "O",
+                "c", "C", "b", "B", "_", ".", "'", "d",
+                "i", "u"
+            }
             msgPos = self.buf_pos
 
             t = TToken(literal="")
@@ -271,16 +281,17 @@ class TLexer(TBaseLexer):
         numDigits = 0
 
         # function consts
-        literalishChars = baseCodeChars + [
-            "A", "B", "C", "D", "E", "F",
-            "a", "b", "c", "d", "e", "f",
-            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+        baseCodeChars = {"X", "x", "o", "b", "B", "c", "C"}
+        literalishChars = set(list(baseCodeChars) + [
+            countup('A', 'F'),
+            countup('a', 'f'),
+            countup('0', '9'),
             "_", "'"
-        ]
-        floatTypes = [
+        ])
+        floatTypes = {
             TTokType.tkFloatLit, TTokType.tkFloat32Lit,
             TTokType.tkFloat64Lit, TTokType.tkFloat128Lit
-        ]
+        }
         result.tokType = TTokType.tkIntLit
         result.literal = ""
         result.base = TNumericalBase.base10

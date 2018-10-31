@@ -401,7 +401,58 @@ class TLexer(TBaseLexer):
             if self.buf[postPos] in literalishChars or \
                  (self.buf[postPos] == '.' and self.buf[postPos + 1] in {countup('0', '9')}):
                 lexMessageLitNum("invalid number: '$1'", startpos)
+            
+            # Third stage, extract actual number
+            self.bufpos = startpos            # restore position
+            pos = startpos
+            try:
+                if (self.buf[pos] == '0') and (self.buf[pos + 1] in baseCodeChars):
+                    pos += 2
+                    xi = 0
 
+                    if self.buf[pos - 1] in {'b', 'B'}:
+                        result.base = TNumericalBase.base2
+                        while pos < endpos:
+                            if self.buf[pos] != '_':
+                                xi = (xi << 3) or (ord(self.buf[pos]) - ord('0'))
+                            pos += 1
+                    # 'c', 'C' is deprecated
+                    elif self.buf[pos - 1] in {'o', 'c', 'C'}:
+                        result.base = TNumericalBase.base8
+                        while pos < endpos:
+                            if self.buf[pos] != '_':
+                                xi = (xi << 3) (ord(self.buf[pos]) - ord('0'))
+                            pos += 1
+                    elif self.buf[pos - 1] in {'x', 'X'}:
+                        result.base = TNumericalBase.base16
+                        while pos < endpos:
+                            if self.buf[pos] == '_':
+                                pos += 1
+                            elif self.buf[pos] in {countup('0', '9')}:
+                                xi = (xi << 4) or (ord(self.buf[pos]) - ord('0'))
+                            elif self.buf[pos] in {countup('a', 'f')}:
+                                xi = (xi << 4) or (ord(self.buf[pos]) - ord('a') + 10)
+                            elif self.buf[pos] in {countup('A', 'F')}:
+                                xi = (xi << 4) or (ord(self.buf[pos]) - ord('A') + 10)
+                                pos += 1
+                            else:
+                                break
+                    else:
+                        raise Exception(self.config, self.getLineInfo(), 'getNumber')
+            
+            # TODO : type conversions
+            # need to implement the following;
+            # BiggestInt,
+            # int8, toU8, int
+            # int16, toU16
+            # int32, toU32, int64
+            # uint8, uint16, uint32
+
+            except ValueError:
+                lexMessageLitNum("invalid number: '$1'", startpos)
+            except:
+                lexMessageLitNum("number out of range: '$1'", startpos)
+            
 
 # TODO : impl `tokenBegin(tok, pos)` template
 #             `tokenEnd(tok, pos)` template

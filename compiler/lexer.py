@@ -1085,6 +1085,7 @@ class TLexer(TBaseLexer):
             while True:
                 c = buf[pos]
                 if c == '"':
+                    # ordinary string literal
                     if mode != StringMode.normal and buf[pos + 1] == '"':
                         pos += 2
                         tok.literal += '"'
@@ -1105,3 +1106,21 @@ class TLexer(TBaseLexer):
                     tok.literal += c
                     pos += 1
             self.bufpos = pos
+
+    def getCharacter(self, tok):
+        self.tokenBegin(tok, self.bufpos)
+        self.bufpos += 1
+        c = self.buf[self.bufpos]
+        if c in {countup("\0", chr(ord(" ") - 1)), "'"}:
+            # TODO : errGenerated
+            self.lexMessage(None, "invalid character literal")
+        elif c == "\\":
+            self.getEscapedChar(tok)
+        else:
+            tok.literl = str(c)
+            self.bufpos += 1
+        if self.buf[self.bufpos] != "'":
+            # TODO : errGenerated
+            self.lexMessage(None, "missing closing ' for character literal")
+        self.tokenEndIgnore(tok, self.bufpos)
+        self.bufpos += 1

@@ -23,6 +23,8 @@ from .system import (
 
 try:
     from nimsuggest import nimsuggest
+
+    gIndentationWidth = 0
 except ImportError:
     nimsuggest = None
 
@@ -1485,7 +1487,88 @@ class TLexer(TBaseLexer):
             tok.commentOffsetB = self.offsetBase + pos - 1
 
     def skip(self, tok):
-        pass
+        pos = self.bufpos
+        buf = self.buf
+        self.tokenBegin(tok, pos)
+        tok.strongSpaceA = 0
+        if nimpretty is not None:
+            hasComment = False
+            commentIndent = self.currLineIndent
+            tok.commentOffsetA = self.offsetBase + pos
+            tok.commentOffsetB = tok.commentOffsetA
+            tok.line = -1
+        while True:
+            if buf[pos] == " ":
+                pos += 1
+                tok.strongSpaceA += 1
+            elif buf[pos] == "\t":
+                if not self.allowTabs:
+                    # TODO : errGenerated
+                    self.lexMessage(None, pos, "tabulators are not allowed")
+                    pos += 1
+            elif buf[pos] in [CR, LF]:
+                self.tokenEndPrevious(tok, pos)
+                pos = self.handleCRLF(pos)
+                buf = self.buf
+                indent = 0
+                while True:
+                    if buf[pos] == " ":
+                        pos += 1
+                        indent += 1
+                    elif buf[pos] == "#" and buf[pos + 1] == "[":
+                        if nimpretty is not None:
+                            hasComment = True
+                            if tok.line < 0:
+                                tok.line = self.lineNumber
+                                commentIndent = indent
+                        self.skipMultiLineComment(tok, pos + 2, False)
+                        pos = self.bufpos
+                        buf = self.buf
+                    else:
+                        break
+                tok.strongSpaceA = 0
+                if nimpretty is not None:
+                    if buf[pos] == "#" and tok.line < 0:
+                        commentIndent = indent
+                if buf[pos] > " " and (buf[pos] != "#" or buf[pos + 1] == "#"):
+                    tok.ident = indent
+                    self.currLineIndent = indent
+                    break
+            elif buf[pos] == "#":
+                # do not skip documentation comment:
+                if buf[pos + 1] == "#":
+                    break
+                if nimpretty is not None:
+                    hasComment = True
+                    if tok.line < 0:
+                        tok.line = self.lineNumber
+
+                if buf[pos + 1] == "[":
+                    self.skipMultiLineComment(tok, pos + 2, False)
+                    pos = self.bufpos
+                    buf = self.buf
+                else:
+                    self.tokenBegin(pos)
+                    while buf[pos] not in {CR, LF, EndOfFile}:
+                        if nimpretty is not None:
+                            tok.literal += buf[pos]
+                        pos += 1
+                    self.tokenEndIgnore(pos + 1)
+                    if nimpretty is not None:
+                        tok.commentOffsetB = self.offsetBase + pos + 1
+            else:
+                break
+        self.tokenEndPrevious(tok, pos - 1)
+        self.bufpos = pos
+        if nimpretty is not None:
+            if hasComment:
+                tok.commentOffsetB = self.offsetBase + pos - 1
+                tok.tokType = TTokType.tkComment
+                tok.indent = commentIndent
+            # fmt: off
+            if gIndentationWidth <= 0:         # NOQA: F823 local variable name gIndentationWidth referenced before assignment
+                gIndentationWidth = tok.ident  # NOQA: F841 local variable name is assigned to but never used
+            # fmt: on
 
     def rawGetTok(self, tok):
         pass

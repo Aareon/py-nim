@@ -3,7 +3,7 @@ import string
 import sys
 from enum import Enum
 
-from .lexbase import TBaseLexer
+from .lexbase import *
 
 try:
     from nimsuggest import nimsuggest
@@ -675,3 +675,76 @@ class TLexer(TBaseLexer):
             # TODO : define CR
             tok.literal += CR
             self.bufpos += 1
+        elif self.buf[self.bufpos] in ['l', 'L']:
+            tok.literal += LF
+            self.bufpos += 1
+        elif self.buf[self.bufpos] in ['f', 'F']:
+            tok.literal += FF
+            self.bufpos += 1
+        elif self.buf[self.bufpos] in ['e', 'E']:
+            tok.literal += ESC
+            self.bufpos += 1
+        elif self.buf[self.bufpos] in ['a', 'A']:
+            tok.literal += FF
+            self.bufpos += 1
+        elif self.buf[self.bufpos] in ['b', 'B']:
+            tok.literal += BACKSPACE
+            self.bufpos += 1
+        elif self.buf[self.bufpos] in ['v', 'V']:
+            tok.literal += FF
+            self.bufpos += 1
+        elif self.buf[self.bufpos] in ['t', 'T']:
+            tok.literal += '\t'
+            self.bufpos += 1
+        elif self.buf[self.bufpos] in ['\'', '\"']:
+            tok.literal += self.buf[self.bufpos]
+            self.bufpos += 1
+        elif self.buf[self.bufpos] == '\\':
+            tok.literal += '\\'
+            self.bufpos += 1
+        elif self.buf[self.bufpos] in ['x', 'X']:
+            self.bufpos += 1
+            xi = 0
+            self.handleHexChar(xi)
+            tok.literal += chr(xi)
+        elif self.buf[self.bufpos] in ['u', 'U']:
+            if tok.tokType == TTokType.tkCharLit:
+                # TODO : `lexMessage(L, errGenerated, ...`
+                self.lexMessage(None, "\\u not allowed in character literal")
+            self.bufpos += 1
+            xi = 0
+            if self.buf[self.bufpos] == '{':
+                self.bufpos += 1
+                start = self.bufpos
+                while self.buf[self.bufpos] != '}':
+                    self.handleHexChar(xi)
+                if start == self.bufpos:
+                    # TODO : `errGenerated`
+                    self.lexMessage(None,
+                    "Unicode codepoint cannot be empty")
+                self.bufpos += 1
+                if xi > 0x10ffff:
+                    hex_ = str(self.buf)[countup(start, self.bufpos-2)]
+                    # TODO : `errGenerated`
+                    self.lexMessage(None,
+                    f"Unicode codepoint must be lower than 0x10FFFF, but was: {hex_}")
+            else:
+                self.handleHexChar(xi)
+                self.handleHexChar(xi)
+                self.handleHexChar(xi)
+                self.handleHexChar(xi)
+            self.addUnicodeCodePoint(tok.literal, xi)
+        elif self.buf[self.bufpos] in {countup('0', '9')}:
+            if self.matchTwoChars('0', {countup('0', '9')}):
+                # TODO : `warnOctalEscape`
+                self.lexMessage(None)
+            xi = 0
+            self.handleDecChars(xi)
+            if (xi <= 255):
+                tok.literal += chr(xi)
+            else:
+                # TODO : `errGenerated`
+                self.lexMessage(None, "invalid character constant")
+        else:
+            self.lexMessage(None, "invalid character constant")
+            

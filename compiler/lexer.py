@@ -508,11 +508,33 @@ def ones(n):
 
 
 def getIndentWidth(fileIdx, inputstream, cache, config):
-    pass
+    lex = TLexer()
+    tok = TToken()
+    tok.initToken()
+    lex.openLexer(fileIdx, inputstream, cache, config)
+    while True:
+        lex.rawGetTok(tok)
+        result = tok.ident
+        if result > 0 or tok.tokType == TTokType.tkEof:
+            break
+    lex.closeLexer()
+    return result
 
 
 def getPrecedence(ident):
-    pass
+    tok = TToken()
+    tok.initToken()
+    tok.ident = ident
+    if tok.ident.id in [
+        countup(
+            ord(tokKeywordLow) - TTokType.tkSymbol,
+            ord(tokKeywordHigh) - ord(TTokType.tkSymbol),
+        )
+    ]:
+        tok.tokType = TTokType(tok.ident.id + ord(TTokType.tkSymbol))
+    else:
+        tok.tokType = TTokType.tkOpr
+    return tok.getPrecedence(False)
 
 
 class TLexer(TBaseLexer):

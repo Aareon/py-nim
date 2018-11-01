@@ -1201,3 +1201,20 @@ class TLexer(TBaseLexer):
             tok.strongSpaceB += 1
         if buf[pos] in {CR, LF, EndOfFile}:
             tok.strongSpaceB = -1
+
+    def newLineFollows(self):
+        pos = self.bufpos
+        buf = self.buf
+        while True:
+            if buf[pos] in [' ', '\t']:
+                pos += 1
+            elif buf[pos] in [CR, LF]:
+                return True
+            elif buf[pos] == '#':
+                pos += 1
+                if buf[pos] == '#':
+                    pos += 1
+                if buf[pos] != '[':
+                    return True
+            else:
+                break

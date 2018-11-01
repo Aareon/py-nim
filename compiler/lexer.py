@@ -1431,7 +1431,58 @@ class TLexer(TBaseLexer):
                 tok.commentOffsetB = self.offsetBase + pos - 1
 
     def scanComment(self, tok):
-        pass
+        pos = self.bufpos
+        buf = self.buf
+        tok.tokType = TTokType.tkComment
+        # iNumber contains the number of '\n' in the token
+        tok.iNumber = 0
+        assert buf[pos + 1] == "#"
+        if nimpretty is not None:
+            tok.commentOffsetA = self.offsetBase + pos - 1
+
+        if buf[pos + 2] == "[":
+            self.skipMultiLineComment(tok, pos + 3, True)
+            return
+        self.tokenBegin(tok, pos)
+        pos += 2
+
+        toStrip = 0
+        while buf[pos] == " ":
+            pos += 1
+            toStrip += 1
+
+        while True:
+            # lastBackslash = -1
+            while buf[pos] not in {CR, LF, EndOfFile}:
+                if buf[pos] == "\\":
+                    # lastBackslash = pos + 1
+                    pass
+                tok.literal += buf[pos]
+                pos += 1
+            self.tokenEndIgnore(tok, pos)
+            pos = self.handleCRLF(pos)
+            buf = self.buf
+            indent = 0
+            while buf[pos] == " ":
+                pos += 1
+                indent += 1
+
+            if buf[pos] == "#" and buf[pos + 1] == "#":
+                tok.literal += "\n"
+                pos += 2
+                c = toStrip
+                while buf[pos] == " " and c > 0:
+                    pos += 1
+                    c -= 1
+                tok.iNumber += 1
+            else:
+                if buf[pos] > " ":
+                    self.indentAhead = indent
+                self.tokenEndIgnore(tok, pos)
+                break
+        self.bufpos = pos
+        if nimpretty is not None:
+            tok.commentOffsetB = self.offsetBase + pos - 1
 
     def skip(self, tok):
         pass

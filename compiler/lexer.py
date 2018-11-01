@@ -1127,7 +1127,7 @@ class TLexer(TBaseLexer):
 
     def getSymbol(self, tok):
         # TODO : impl hashes.Hash
-        h = 0
+        # h: Hash = 0
         pos = self.bufpos
         buf = self.buf
         self.tokenBegin(tok, pos)
@@ -1163,3 +1163,41 @@ class TLexer(TBaseLexer):
             tok.tokType = TTokType.tkSymbol
         else:
             tok.tokType = TTokType(tok.ident.id + ord(TTokType.tkSymbol))
+
+    def endOperator(self, tok, pos, hash):
+        # TODO : impl hashes.!$
+        # h = !$hash
+
+        # TODO : impl addr
+        # tok.ident = self.cache.getIdent(addr(self.buf[self.bufpos]),
+        # pos - self.bufpos, h)
+
+        # TODO : impl wordrecg.oprLow and oprHigh
+        # if (tok.ident.id < oprLow) or (tok.ident.id > oprHigh):
+        #   tok.tokType = tkOpr
+        # else:
+        #   tok.tokType = TTokType(tok.ident.id - oprLow + ord(tkColon))
+        self.bufpos = pos
+
+    def getOperator(self, tok):
+        pos = self.bufpos
+        buf = self.buf
+        self.tokenBegin(tok, pos)
+        # TODO : impl hashes.Hash
+        h = 0
+        while True:
+            c = buf[pos]
+            if c not in OpChars:
+                break
+            # TODO : h !& ord(c)
+            pos += 1
+        self.endOperator(tok, pos, h)
+        self.tokenEnd(tok, pos - 1)
+        # advance pos but don't store it in L.bufpos so the next token (which might
+        # be an operator too) gets the preceding spaces:
+        tok.strongSpaceB = 0
+        while buf[pos] == ' ':
+            pos += 1
+            tok.strongSpaceB += 1
+        if buf[pos] in {CR, LF, EndOfFile}:
+            tok.strongSpaceB = -1

@@ -499,6 +499,10 @@ def unsafeParseUInt(s, b, start=0):
         return i - start
 
 
+def isNimIdentifier(s):
+    pass
+
+
 def ones(n):
     return (1 << n) - 1
 

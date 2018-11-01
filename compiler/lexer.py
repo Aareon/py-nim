@@ -380,6 +380,79 @@ class TToken:
         self.base = TNumericalBase.base10
         self.ident = None
 
+    def getPrecedence(self, strongSpaces):
+        def considerStrongSpaces(x):
+            if strongSpaces:
+                return 100 - int(self.strongSpaceA) * 10
+            else:
+                return 0
+
+        if self.tokType == TTokType.tkOpr:
+            L = self.ident.s.len
+            relevantChar = self.ident.s[0]
+
+            # arrow like?
+            if (
+                L > 1
+                and self.ident.s[L - 1] == ">"
+                and self.ident.s[L - 2] in {"-", "~", "="}
+            ):
+                return considerStrongSpaces(1)
+
+            def considerAsgn(value):
+                return 1 if self.ident.s[L - 1] == "=" else value
+
+            if relevantChar in ["$", "^"]:
+                result = considerAsgn(10)
+            elif relevantChar in ["*", "%", "/", "\\"]:
+                result = considerAsgn(9)
+            elif relevantChar == "~":
+                result = 8
+            elif relevantChar in ["+", "-", "|"]:
+                result = considerAsgn(8)
+            elif relevantChar == "&":
+                result = considerAsgn(7)
+            elif relevantChar in ["=", "<", ">", "!"]:
+                result = 5
+            elif relevantChar == ".":
+                result = considerAsgn(6)
+            elif relevantChar == "?":
+                result = 2
+            else:
+                result = considerAsgn(2)
+        elif self.tokType in [
+            TTokType.tkDiv,
+            TTokType.tkMod,
+            TTokType.tkShl,
+            TTokType.tkShr,
+        ]:
+            result = 9
+        elif self.tokType in [
+            TTokType.tkIn,
+            TTokType.tkNotin,
+            TTokType.tkIs,
+            TTokType.tkIsnot,
+            TTokType.tkNot,
+            TTokType.tkOf,
+            TTokType.tkAs,
+        ]:
+            result = 5
+        elif self.tokType == TTokType.tkDotDot:
+            result = 6
+        elif self.tokType == TTokType.tkAnd:
+            result = 4
+        elif self.tokType in [
+            TTokType.tkOr,
+            TTokType.tkXor,
+            TTokType.tkPtr,
+            TTokType.tkRef,
+        ]:
+            result = 3
+        else:
+            return -10
+
+        return considerStrongSpaces(result)
+
 
 def unsafeParseUInt(s, b, start=0):
     i = start
@@ -395,6 +468,14 @@ def unsafeParseUInt(s, b, start=0):
 
 def ones(n):
     return (1 << n) - 1
+
+
+def getIndentWidth(fileIdx, inputstream, cache, config):
+    pass
+
+
+def getPrecedence(ident):
+    pass
 
 
 class TLexer(TBaseLexer):
@@ -1196,7 +1277,7 @@ class TLexer(TBaseLexer):
         # advance pos but don't store it in L.bufpos so the next token (which might
         # be an operator too) gets the preceding spaces:
         tok.strongSpaceB = 0
-        while buf[pos] == ' ':
+        while buf[pos] == " ":
             pos += 1
             tok.strongSpaceB += 1
         if buf[pos] in {CR, LF, EndOfFile}:
@@ -1206,15 +1287,27 @@ class TLexer(TBaseLexer):
         pos = self.bufpos
         buf = self.buf
         while True:
-            if buf[pos] in [' ', '\t']:
+            if buf[pos] in [" ", "\t"]:
                 pos += 1
             elif buf[pos] in [CR, LF]:
                 return True
-            elif buf[pos] == '#':
+            elif buf[pos] == "#":
                 pos += 1
-                if buf[pos] == '#':
+                if buf[pos] == "#":
                     pos += 1
-                if buf[pos] != '[':
+                if buf[pos] != "[":
                     return True
             else:
                 break
+
+    def skipMultiLineComment(self, tok, start, isDoc):
+        pass
+
+    def scanComment(self, tok):
+        pass
+
+    def skip(self, tok):
+        pass
+
+    def rawGetTok(self, tok):
+        pass

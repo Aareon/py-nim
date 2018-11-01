@@ -1360,7 +1360,75 @@ class TLexer(TBaseLexer):
                 break
 
     def skipMultiLineComment(self, tok, start, isDoc):
-        pass
+        pos = start
+        buf = self.buf
+        toStrip = 0
+        self.tokenBegin(tok, pos)
+        if isDoc:
+            toStrip = self.getColNumber(pos)
+            while buf[pos] == " ":
+                pos += 1
+            if buf[pos] in {CR, LF}:
+                pos = self.handleCRLF(pos)
+                buf = self.buf
+                toStrip = 0
+            while buf[pos] == " ":
+                pos += 1
+                toStrip += 1
+
+        nesting = 0
+        while True:
+            if buf[pos] == "#":
+                if isDoc:
+                    if buf[pos + 1] == "#" and buf[pos + 2] == "[":
+                        nesting += 1
+                    tok.literal += "#"
+                elif buf[pos + 1] == "[":
+                    nesting += 1
+                pos += 1
+            elif buf[pos] == "]":
+                if isDoc:
+                    if buf[pos + 1] == "#" and buf[pos + 2] == "#":
+                        if nesting == 0:
+                            self.tokenEndIgnore(tok, pos + 2)
+                            pos += 3
+                            break
+                        nesting -= 1
+                    tok.literal += "]"
+                elif buf[pos + 1] == "#":
+                    if nesting == 0:
+                        self.tokenEndIgnore(tok, pos + 1)
+                        pos += 2
+                        break
+                    nesting -= 1
+                pos += 1
+            elif buf[pos] in {CR, LF}:
+                self.tokenEndIgnore(tok, pos)
+                pos = self.handleCRLF(pos)
+                buf = self.buf
+                # strip leading whitespace:
+                if nimpretty is not None:
+                    tok.literal += r"\L"
+                if isDoc:
+                    if nimpretty is None:
+                        tok.literal += "\n"
+                    tok.iNumber += 1
+                    c = toStrip
+                    while buf[pos] == " " and c > 0:
+                        pos += 1
+                        c -= 1
+            elif buf[pos] == EndOfFile:
+                self.tokenEndIgnore(tok, pos)
+                # TODO : errGenerated
+                self.lexMessagePos(None, pos, "end of multiline comment expected")
+                break
+            else:
+                if isDoc or nimpretty is not None:
+                    tok.literal += buf[pos]
+                pos += 1
+            self.bufpos = pos
+            if nimpretty is not None:
+                tok.commentOffsetB = self.offsetBase + pos - 1
 
     def scanComment(self, tok):
         pass

@@ -346,6 +346,10 @@ CursorPosition = Enum(
 StringMode = Enum("StringMode", ["normal", "raw", "generalized"])
 
 
+def isKeyword(kind: TTokType):
+    return (kind >= tokKeywordLow) and (kind <= tokKeywordHigh)
+
+
 class TToken:
     def __init__(self, **kwargs):
         self.tokType = kwargs.get("tokType")
@@ -359,6 +363,35 @@ class TToken:
         self.literal = kwargs.get("literal")
         self.line = kwargs.get("line")
         self.col = kwargs.get("col")
+
+    def tokToStr(self):
+        if self.tokType in {countup(TTokType.tkIntLit, TTokType.tkInt64Lit)}:
+            return str(self.iNumber)
+        elif self.tokType in {countup(TTokType.tkFloatLit, TTokType.tkFloat64Lit)}:
+            return str(self.fNumber)
+        elif self.tokType in {
+            TTokType.tkInvalid,
+            countup(TTokType.tkStrLit, TTokType.tkCharLit),
+            TTokType.tkComment,
+        }:
+            return self.literal
+        elif self.tokType in {
+            countup(TTokType.tkParLe, TTokType.tkColon),
+            TTokType.tkEof,
+            TTokType.tkAccent,
+        }:
+            return TokTypeToStr[self.tokType]
+        else:
+            if self.ident is not None:
+                return self.ident.s
+            else:
+                return ""
+
+    def prettyTok(self):
+        if isKeyword(self.tokType):
+            return f"keyword {self.ident.s}"
+        else:
+            return self.tokToStr()
 
     def initToken(self):
         self.tokType = TTokType.tkInvalid

@@ -1124,3 +1124,42 @@ class TLexer(TBaseLexer):
             self.lexMessage(None, "missing closing ' for character literal")
         self.tokenEndIgnore(tok, self.bufpos)
         self.bufpos += 1
+
+    def getSymbol(self, tok):
+        # TODO : impl hashes.Hash
+        h = 0
+        pos = self.bufpos
+        buf = self.buf
+        self.tokenBegin(tok, pos)
+        while True:
+            c = buf[pos]
+            if c in {countup("a", "z"), countup("0", "9"), countup("\x80", "\xff")}:
+                # TODO : impl hashes.!&
+                # h = h !& ord(c)
+                pos += 1
+            elif c in {countup("A", "Z")}:
+                c = chr(ord(c) + (ord("a") - ord("A")))  # toLower()
+                # TODO : h = h !& ord(c)
+                pos += 1
+            elif c == "_":
+                if buf[pos + 1] not in SymChars:
+                    # TODO : errGenerated
+                    self.lexMessage(None, "invalid token: trailing underscore")
+                    break
+                pos += 1
+            else:
+                break
+        self.tokenEnd(tok, pos - 1)
+        # TODO : impl hashes.!$
+        # h = !$h
+
+        # TODO : impl addr
+        # tok.ident = self.cache.getIdent(addr(self.buf[self.bufpos]),
+        # pos - self.bufpos, h)
+        self.bufpos = pos
+        if (tok.ident.id < ord(tokKeywordLow) - ord(TTokType.tkSymbol)) or (
+            tok.ident.id > ord(tokKeywordHigh) - ord(TTokType.tkSymbol)
+        ):
+            tok.tokType = TTokType.tkSymbol
+        else:
+            tok.tokType = TTokType(tok.ident.id + ord(TTokType.tkSymbol))

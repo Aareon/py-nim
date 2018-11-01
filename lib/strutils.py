@@ -1,8 +1,10 @@
-from lib.system import *
-from lib import parseutils
+import parseutils
+from system import BiggestFloat
+
 
 def parseFloat(s: str, start=0):
     return BiggestFloat(s)
+
 
 def parseBiggestInt(s):
     L = parseutils.parseBiggestInt(s, 0)

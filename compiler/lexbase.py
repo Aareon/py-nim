@@ -1,16 +1,16 @@
 # constants
-Lrz = ' '
-Apo = '\''
-Tabulator = '\x09'
-ESC = '\x1B'
-CR = '\x0D'
-FF = '\x0C'
-LF = '\x0A'
-BEL = '\x07'
-BACKSPACE = '\x08'
-VT = '\x0B'
-EndOfFile = '\0'
-CR, LF = '\r', '\n'
+Lrz = " "
+Apo = "'"
+Tabulator = "\x09"
+ESC = "\x1B"
+CR = "\x0D"
+FF = "\x0C"
+LF = "\x0A"
+BEL = "\x07"
+BACKSPACE = "\x08"
+VT = "\x0B"
+EndOfFile = "\0"
+CR, LF = "\r", "\n"
 NewLines = [CR, LF]
 
 
@@ -19,13 +19,13 @@ class TBaseLexer:
         self.bufpos = None
         self.buf = None
         self.bufLen = None
-        self.stream = None            # llstream object
+        self.stream = None  # llstream object
         self.lineNumber = None
         self.sentinel = None
         self.lineStart = None
         self.offsetBase = None
 
-    def openBaseLexer(self, inputstream, bufLen:int=8192):
+    def openBaseLexer(self, inputstream, bufLen: int = 8192):
         assert bufLen > 0
 
         self.bufpos = 0
@@ -47,7 +47,7 @@ class TBaseLexer:
         self.buf = None
         # TODO : self.stream.close()
 
-    def getCurrentLine(self, marker:bool=True):
+    def getCurrentLine(self, marker: bool = True):
         result = ""
         i = self.lineStart
         while self.buf[i] not in [CR, LF, EndOfFile]:
@@ -60,10 +60,10 @@ class TBaseLexer:
             result += (" " * self.getColNumber(self.bufpos)) + "^\n"
         return result
 
-    def getColNumber(self, pos:int):
+    def getColNumber(self, pos: int):
         return abs(pos - self.lineStart)
 
-    def handleCR(self, pos:int):
+    def handleCR(self, pos: int):
         assert self.buf[pos] == CR
 
         self.lineNumber += 1
@@ -72,23 +72,23 @@ class TBaseLexer:
             result = self.fillBaseLexer(result)
         return result
 
-    def handleLF(self, pos:int):
+    def handleLF(self, pos: int):
         assert self.buf[pos] == LF
 
         self.lineNumber += 1
         return self.fillBaseLexer(pos)
 
     def skipUTF8_BOM(self):
-        if self.buf[0] == '\xEF' and self.buf[1] == '\xBB' and self.buf[2] == '\xBF':
+        if self.buf[0] == "\xEF" and self.buf[1] == "\xBB" and self.buf[2] == "\xBF":
             self.bufpos += 3
             self.lineStart += 3
         return self
 
-    def fillBaseLexer(self, pos:int):
+    def fillBaseLexer(self, pos: int):
         assert pos <= self.sentinel
 
         if pos < self.sentinel:
-            self.lineStart = pos + 1   # nothing to do
+            self.lineStart = pos + 1  # nothing to do
         else:
             self.fillBuffer()
             self.offsetBase += pos + 1
@@ -136,6 +136,6 @@ class TBaseLexer:
                         self.buf[old_buf_len + chars_read] = EndOfFile
                         self.sentinel = old_buf_len + chars_read
                         break
-                    
+
                     s = self.bufLen + 1
         return self

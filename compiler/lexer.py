@@ -549,6 +549,8 @@ class TLexer(TBaseLexer):
         self.cursor: CursorPosition = None
         self.errorHandler = None  # TODO : impl TErrorHandler
         self.cache = None  # TODO : impl IdentCache
+        if nimsuggest is not None:
+            self.previousToken = None
         self.config = None  # TODO : impl ConfigRef
 
     def getLineInfo(self, tok: TToken = None):
@@ -1571,4 +1573,167 @@ class TLexer(TBaseLexer):
             # fmt: on
 
     def rawGetTok(self, tok):
-        pass
+        def atTokenEnd():
+            if nimsuggest is not None:
+                # we attach the cursor the last *strong* token
+                if tok.tokType not in weakTokens:
+                    self.previousToken.line = uint16(tok.line)
+                    self.previousToken.col = int16(tok.col)
+
+        if nimsuggest is not None:
+            self.cursor = CursorPosition("None")
+        tok.fillToken()
+        if self.indentAhead >= 0:
+            tok.indent = self.indentAhead
+            self.currLineIndent = self.indentAhead
+            self.indentAhead = -1
+        else:
+            tok.indent = -1
+        self.skip(tok)
+        if nimpretty is not None:
+            if tok.tokType == TTokType.tkComment:
+                self.indentAhead = self.currLineIndent
+                return
+        c = self.buf[self.bufpos]
+        tok.line = self.lineNumber
+        tok.col = self.getColNumber(self.bufpos)
+        if c in SymStartChars and c not in {"r", "R"}:
+            self.getSymbol(tok)
+        else:
+            if c == "#":
+                self.scanComment(tok)
+            elif c == "*":
+                # '*:' is unfortunately a special case, because it is two tokens in
+                # 'var v*: int'
+                if (
+                    self.buf[self.bufpos + 1] == ":"
+                    and self.buf[self.bufpos + 2] not in OpChars
+                ):
+                    # TODO : impl hashes.!&
+                    h = (0, ord("*"))
+                    self.endOperator(tok, self.bufpos + 1, h)
+                else:
+                    self.getOperator(tok)
+            elif c == ",":
+                tok.tokType = TTokType.tkComma
+                self.bufpos += 1
+            elif c in ["r", "R"]:
+                if self.buf[self.bufpos + 1] == '"':
+                    self.bufpos += 1
+                    self.getString(tok, StringMode.raw)
+                else:
+                    self.getSymbol(tok)
+            elif c == "(":
+                self.bufpos += 1
+                if self.buf[self.bufpos] == "." and self.buf[self.bufpos + 1] != ".":
+                    tok.tokType = TTokType.tkParDotLe
+                    self.bufpos += 1
+                else:
+                    tok.tokType = TTokType.tkParLe
+                    if nimsuggest is not None:
+                        if (
+                            self.fileIdx == self.config.m.trackPos.fileIndex
+                            and tok.col < self.config.m.trackPos.col
+                            and tok.line == int(self.config.m.trackPos.line)
+                            and self.config.ideCmd == "ideCon"
+                        ):
+                            self.config.m.trackPos.col = int16(tok.col)
+            elif c == ")":
+                tok.tokType = TTokType.tkParRi
+                self.bufpos += 1
+            elif c == "[":
+                self.bufpos += 1
+                if self.buf[self.bufpos] == "." and self.buf[self.bufpos + 1] != ".":
+                    tok.tokType = TTokType.tkBracketDotLe
+                    self.bufpos += 1
+                elif self.buf[self.bufpos] == ":":
+                    tok.tokType = TTokType.tkBracketLeColon
+                else:
+                    tok.tokType = TTokType.tkBracketLe
+                    self.bufpos += 1
+            elif c == "]":
+                tok.tokType = TTokType.tkBracketRi
+            elif c == ".":
+                if nimsuggest is not None:
+                    if (
+                        self.fileIdx == self.config.m.trackPos.fileIndex
+                        and (tok.col + 1) == self.config.m.trackPos.col
+                        and tok.line == int(self.config.m.trackPos.line)
+                        and self.config.ideCmd == "ideSug"
+                    ):
+                        tok.tokType = TTokType.tkDot
+                        self.cursor = CursorPosition.InToken
+                        self.config.m.trackPos.col = int16(tok.col)
+                        self.bufpos += 1
+                        atTokenEnd()
+                        return
+                if self.buf[self.bufpos + 1] == "]":
+                    tok.tokType = TTokType.tkBracketDotRi
+                    self.bufpos += 2
+                elif self.buf[self.bufpos + 1] == "}":
+                    tok.tokType = TTokType.tkCurlyDotRi
+                    self.bufpos += 2
+                elif self.buf[self.bufpos + 1] == ")":
+                    tok.tokType = TTokType.tkParDotRi
+                    self.bufpos += 2
+                else:
+                    self.getOperator(tok)
+            elif c == '{':
+                self.bufpos += 1
+                if self.buf[self.bufpos] == '.' and self.buf[self.bufpos + 1] != '.':
+                    tok.tokType = TTokType.tkCurlyDotLe
+                    self.bufpos += 1
+                else:
+                    tok.tokType = TTokType.tkCurlyLe
+            elif c == '}':
+                tok.tokType = TTokType.tkCurlyRi
+                self.bufpos += 1
+            elif c == ';':
+                tok.tokType = TTokType.tkSemiColon
+                self.bufpos += 1
+            elif c == '`':
+                tok.tokType = TTokType.tkAccent
+                self.bufpos += 1
+            elif c == '_':
+                self.bufpos += 1
+                if self.buf[self.bufpos] not in list(SymChars) + ['_']:
+                    tok.tokType = TTokType.tkSymbol
+                    tok.ident = self.cache.getIdent('_')
+                else:
+                    tok.literal = str(c)
+                    tok.tokType = TTokType.tkInvalid
+                    # TODO : errGenerated
+                    self.lexMessage(None, f"invalid token: {c} (\\{ord(c)})")
+            elif c == "\"":
+                # check for generalized raw string literal:
+                if self.bufpos > 0 and self.buf[self.bufpos - 1] in SymChars:
+                    mode = StringMode.generalized
+                else:
+                    mode = StringMode.normal
+                self.getString(tok, mode)
+                if mode == StringMode.generalized:
+                    # tkRStrLit -> tkGStrLit
+                    # tkTripleStrLit -> tkGTripleStrLit
+                    tok.tokType += 2
+            elif c == "'":
+                tok.tokType = TTokType.tkCharLit
+                self.getCharacter(tok)
+                tok.tokType = TTokType.tkCharLit
+            elif c in countup('0', '9'):
+                self.getNumber(tok)
+                c = self.buf[self.bufpos]
+                if c in list(SymChars) + ['_']:
+                    # TODO : errGenerated
+                    self.lexMessage(None, "invalid token: no whitespace between number and indentifier")
+            else:
+                if c in OpChars:
+                    self.getOperator(tok)
+                elif c == EndOfFile:
+                    tok.tokType = TTokType.tkEof
+                    tok.indent = 0
+                else:
+                    tok.literal = str(c)
+                    tok.tokType = TTokType.tkInvalid
+                    self.lexMessage(None, f"invalid token: {c} (\\{ord(c)})")
+                    self.bufpos += 1
+        atTokenEnd()

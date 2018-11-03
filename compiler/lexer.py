@@ -524,6 +524,7 @@ def getIndentWidth(fileIdx, inputstream, cache, config):
 
 
 def getPrecedence(ident):
+    # assumes ident is binary operator already
     tok = TToken()
     tok.initToken()
     tok.ident = ident
@@ -1734,6 +1735,7 @@ class TLexer(TBaseLexer):
                 else:
                     tok.literal = str(c)
                     tok.tokType = TTokType.tkInvalid
+                    # TODO : errGenerated
                     self.lexMessage(None, f"invalid token: {c} (\\{ord(c)})")
                     self.bufpos += 1
         atTokenEnd()

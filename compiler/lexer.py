@@ -20,6 +20,7 @@ from .system import (
     uint16,
     uint32,
 )
+from .lineinfos import TMsgKind
 
 try:
     from nimsuggest import nimsuggest
@@ -626,9 +627,6 @@ class TLexer(TBaseLexer):
         if nimpretty is not None:
             tok.offsetB = self.offsetBase + pos
 
-    # TODO : impl `tokenEndIgnore(tok, pos)` template
-    #             `tokenEndPrevious(tok, pos)` template
-
     def eatChar(self, tok, replacementChar=None):
         if replacementChar is not None:
             tok.literal += replacementChar
@@ -650,7 +648,7 @@ class TLexer(TBaseLexer):
             if self.buf[self.bufpos] == "_":
                 if self.buf[self.bufpos + 1] not in chars:
                     self.lexMessage(
-                        None,
+                        TMsgKind.errGenerated,
                         "only single underscores may occur in a token and token may not "
                         + "end with an underscore: e.g. '1__1' and '1_' are invalid",
                     )
@@ -665,9 +663,9 @@ class TLexer(TBaseLexer):
                 tok.literal += self.buf[self.bufpos]
                 self.bufpos += 1
 
-        # TODO : impl `lineinfos.errGenerated`
+        # lineinfos.errGenerated
         # msgKind=lineinfos.errGenerated
-        def lexMessageLitNum(msg, startpos, msgKind=None):
+        def lexMessageLitNum(msg, startpos, msgKind=TMsgKind.errGenerated):
             literalishChars = {
                 countup("A", "F"),
                 countup("a", "f"),
@@ -747,7 +745,7 @@ class TLexer(TBaseLexer):
                     + "for octals. 'c', 'C' prefix",
                     startpos,
                     None,
-                )  # TODO: impl lineinfos
+                )
             elif self.buf[self.bufpos] == "O":
                 lexMessageLitNum(
                     "$1 is an invalid int literal; For octal literals "
@@ -1011,7 +1009,7 @@ class TLexer(TBaseLexer):
         else:
             # self.lexMessage(errGenerated, ...)
             self.lexMessage(
-                None, f"expected a hex digit, but found {self.buf[self.bufpos]}"
+                TMsgKind.errGenerated, f"expected a hex digit, but found {self.buf[self.bufpos]}"
             )
         # Need to progress for `nim check`
         self.bufpos += 1
@@ -1066,14 +1064,14 @@ class TLexer(TBaseLexer):
             if self.config.oldNewLines:
                 if tok.tokType == TTokType.tkCharLit:
                     # TODO : lexMessage(L, errGenerated, ...
-                    self.lexMessage(None, "\\n not allowed in character literal")
+                    self.lexMessage(TMsgKind.errGenerated, "\\n not allowed in character literal")
                 tok.literal += self.config.target.tnl
             else:
                 tok.literal += r"\L"
         elif self.buf[self.bufpos] in ["p", "P"]:
             if tok.tokType == TTokType.tkCharLit:
                 # TODO : lexMessage(L, errGenerated, ...
-                self.lexMessage(None, "\\p not allowed in character literal")
+                self.lexMessage(TMsgKind.errGenerated, "\\p not allowed in character literal")
             tok.literal += self.config.target.tnl
             self.bufpos += 1
         elif self.buf[self.bufpos] in ["r", "R", "c", "C"]:
@@ -1115,7 +1113,7 @@ class TLexer(TBaseLexer):
         elif self.buf[self.bufpos] in ["u", "U"]:
             if tok.tokType == TTokType.tkCharLit:
                 # TODO : `lexMessage(L, errGenerated, ...`
-                self.lexMessage(None, "\\u not allowed in character literal")
+                self.lexMessage(TMsgKind.errGenerated, "\\u not allowed in character literal")
             self.bufpos += 1
             xi = 0
             if self.buf[self.bufpos] == "{":
@@ -1125,13 +1123,13 @@ class TLexer(TBaseLexer):
                     self.handleHexChar(xi)
                 if start == self.bufpos:
                     # TODO : `errGenerated`
-                    self.lexMessage(None, "Unicode codepoint cannot be empty")
+                    self.lexMessage(TMsgKind.errGenerated, "Unicode codepoint cannot be empty")
                 self.bufpos += 1
                 if xi > 0x10FFFF:
                     hex_ = str(self.buf)[countup(start, self.bufpos - 2)]
                     # TODO : `errGenerated`
                     self.lexMessage(
-                        None,
+                        TMsgKind.errGenerated,
                         f"Unicode codepoint must be lower than 0x10FFFF, but was: {hex_}",
                     )
             else:
@@ -1143,16 +1141,16 @@ class TLexer(TBaseLexer):
         elif self.buf[self.bufpos] in {countup("0", "9")}:
             if self.matchTwoChars("0", {countup("0", "9")}):
                 # TODO : `warnOctalEscape`
-                self.lexMessage(None)
+                self.lexMessage(TMsgKind.warnOctalEscape)
             xi = 0
             self.handleDecChars(xi)
             if xi <= 255:
                 tok.literal += chr(xi)
             else:
                 # TODO : `errGenerated`
-                self.lexMessage(None, "invalid character constant")
+                self.lexMessage(TMsgKind.errGenerated, "invalid character constant")
         else:
-            self.lexMessage(None, "invalid character constant")
+            self.lexMessage(TMsgKind.errGenerated, "invalid character constant")
 
     def handleCRLF(self, pos):
         def registerLine():
@@ -1160,7 +1158,7 @@ class TLexer(TBaseLexer):
 
             if col > MaxLineLength:
                 # TODO : `hintLineTooLong`
-                self.lexMessagePos(None, pos)
+                self.lexMessagePos(TMsgKind.hintLineTooLong, pos)
 
         if self.buf[pos] == CR:
             registerLine()
@@ -1212,7 +1210,7 @@ class TLexer(TBaseLexer):
                     self.lineNumber = line
                     # TODO : errGenerated
                     self.lexMessagePos(
-                        None,
+                        TMsgKind.errGenerated,
                         self.lineStart,
                         'closing """ expected, but end of file reached',
                     )
@@ -1241,7 +1239,7 @@ class TLexer(TBaseLexer):
                 elif c in {CR, LF, EndOfFile}:
                     self.tokenEndIgnore(tok, pos)
                     # TODO : errGenerated
-                    self.lexMessage(None, 'closing " expected')
+                    self.lexMessage(TMsgKind.errGenerated, 'closing " expected')
                     break
                 elif (c == "\\") and mode == StringMode.normal:
                     self.bufpos = pos
@@ -1258,7 +1256,7 @@ class TLexer(TBaseLexer):
         c = self.buf[self.bufpos]
         if c in {countup("\0", chr(ord(" ") - 1)), "'"}:
             # TODO : errGenerated
-            self.lexMessage(None, "invalid character literal")
+            self.lexMessage(TMsgKind.errGenerated, "invalid character literal")
         elif c == "\\":
             self.getEscapedChar(tok)
         else:
@@ -1266,7 +1264,7 @@ class TLexer(TBaseLexer):
             self.bufpos += 1
         if self.buf[self.bufpos] != "'":
             # TODO : errGenerated
-            self.lexMessage(None, "missing closing ' for character literal")
+            self.lexMessage(TMsgKind.errGenerated, "missing closing ' for character literal")
         self.tokenEndIgnore(tok, self.bufpos)
         self.bufpos += 1
 
@@ -1289,7 +1287,7 @@ class TLexer(TBaseLexer):
             elif c == "_":
                 if buf[pos + 1] not in SymChars:
                     # TODO : errGenerated
-                    self.lexMessage(None, "invalid token: trailing underscore")
+                    self.lexMessage(TMsgKind.errGenerated, "invalid token: trailing underscore")
                     break
                 pos += 1
             else:
@@ -1425,7 +1423,7 @@ class TLexer(TBaseLexer):
             elif buf[pos] == EndOfFile:
                 self.tokenEndIgnore(tok, pos)
                 # TODO : errGenerated
-                self.lexMessagePos(None, pos, "end of multiline comment expected")
+                self.lexMessagePos(TMsgKind.errGenerated, pos, "end of multiline comment expected")
                 break
             else:
                 if isDoc or nimpretty is not None:
@@ -1507,7 +1505,7 @@ class TLexer(TBaseLexer):
             elif buf[pos] == "\t":
                 if not self.allowTabs:
                     # TODO : errGenerated
-                    self.lexMessage(None, pos, "tabulators are not allowed")
+                    self.lexMessage(TMsgKind.errGenerated, pos, "tabulators are not allowed")
                     pos += 1
             elif buf[pos] in [CR, LF]:
                 self.tokenEndPrevious(tok, pos)
@@ -1704,7 +1702,7 @@ class TLexer(TBaseLexer):
                     tok.literal = str(c)
                     tok.tokType = TTokType.tkInvalid
                     # TODO : errGenerated
-                    self.lexMessage(None, f"invalid token: {c} (\\{ord(c)})")
+                    self.lexMessage(TMsgKind.errGenerated, f"invalid token: {c} (\\{ord(c)})")
             elif c == "\"":
                 # check for generalized raw string literal:
                 if self.bufpos > 0 and self.buf[self.bufpos - 1] in SymChars:
@@ -1725,7 +1723,7 @@ class TLexer(TBaseLexer):
                 c = self.buf[self.bufpos]
                 if c in list(SymChars) + ['_']:
                     # TODO : errGenerated
-                    self.lexMessage(None, "invalid token: no whitespace between number and indentifier")
+                    self.lexMessage(TMsgKind.errGenerated, "invalid token: no whitespace between number and indentifier")
             else:
                 if c in OpChars:
                     self.getOperator(tok)
@@ -1736,6 +1734,6 @@ class TLexer(TBaseLexer):
                     tok.literal = str(c)
                     tok.tokType = TTokType.tkInvalid
                     # TODO : errGenerated
-                    self.lexMessage(None, f"invalid token: {c} (\\{ord(c)})")
+                    self.lexMessage(TMsgKind.errGenerated, f"invalid token: {c} (\\{ord(c)})")
                     self.bufpos += 1
         atTokenEnd()
